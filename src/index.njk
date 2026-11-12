@@ -1,0 +1,49 @@
+{% from "govuk/components/header/macro.njk" import govukHeader %}
+{% from "govuk/components/service-navigation/macro.njk" import govukServiceNavigation %}
+{% from "govuk/components/footer/macro.njk" import govukFooter %}
+<!DOCTYPE html>
+<html lang="en" class="govuk-template">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1d70b8">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Manage your pension — Teachers’ Pensions prototype</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="./assets/govuk-frontend.min.css">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="govuk-template__body">
+  <script>document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');</script>
+  <a href="#main-content" class="govuk-skip-link" data-module="govuk-skip-link">Skip to main content</a>
+  <div class="prototype-banner"><div class="govuk-width-container"><strong class="govuk-tag govuk-tag--yellow">Prototype</strong><span>For research only. Do not enter real personal information.</span></div></div>
+  <header>
+    {{ govukHeader({ homepageUrl: "#/" }) }}
+  </header>
+  {{ govukServiceNavigation({
+    serviceName: "Teachers’ Pensions – Manage your pension",
+    serviceUrl: "#/"
+  }) }}
+  <div class="govuk-width-container">
+    <div class="govuk-phase-banner"><p class="govuk-phase-banner__content"><strong class="govuk-tag govuk-phase-banner__content__tag">Alpha</strong><span class="govuk-phase-banner__text">This is a fictional service for the Department for Education. No changes are made to a real pension account.</span></p></div>
+    <div id="navigation"></div>
+    <main class="govuk-main-wrapper" id="main-content" tabindex="-1">
+      <noscript><h1 class="govuk-heading-xl">JavaScript is needed for this prototype</h1><p class="govuk-body">Enable JavaScript to try the fictional account journeys. This prototype does not connect to a real pension service.</p></noscript>
+    </main>
+  </div>
+  <footer>
+    {{ govukFooter({
+      meta: {
+        items: [
+          { href: "#/scenarios", text: "Prototype settings and test data" },
+          { href: "#/about", text: "About this prototype" },
+          { href: "#/accessibility", text: "Accessibility" },
+          { href: "./assets/GOVUK-LICENSE.txt", text: "GOV.UK Frontend licence" }
+        ],
+        text: "Not a live government service. All member details and verification codes are fictional."
+      }
+    }) }}
+  </footer>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

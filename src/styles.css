@@ -1,0 +1,36 @@
+/* Use a system font: GDS Transport is restricted to authorised domains. */
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+.govuk-template { background: #f3f2f1; }
+.govuk-template__body { margin: 0; color: #0b0c0c; }
+.prototype-banner { background: #fff7bf; padding: 12px 0; font-size: 16px; line-height: 1.5; }
+.prototype-banner .govuk-width-container { display: flex; align-items: center; gap: 14px; }
+.prototype-banner .govuk-tag { flex-shrink: 0; }
+.govuk-phase-banner { padding-top: 14px; padding-bottom: 14px; }
+.govuk-main-wrapper { min-height: 420px; padding-top: 40px; padding-bottom: 70px; }
+.govuk-main-wrapper:focus { outline: none; }
+.section-label { font-size: 16px; color: #505a5f; margin-bottom: 12px; }
+.journey-heading { margin-top: 0; }
+.step-caption { display: block; margin-bottom: 8px; }
+.demo-details { background: #f3f2f1; padding: 16px 20px; margin-top: 30px; }
+.demo-details .govuk-details__text { padding-bottom: 0; }
+.demo-details dl { margin-bottom: 0; }
+.demo-details .govuk-summary-list__row:last-child { border-bottom: 0; }
+.demo-code { font-family: monospace; white-space: nowrap; }
+.question-group { border-top: 1px solid #b1b4b6; padding-top: 25px; margin-top: 30px; }
+.security-heading { font-size: 19px; color: #505a5f; margin-bottom: 18px; }
+.govuk-panel { text-align: left; }
+.govuk-panel__title { font-size: 36px; }
+.govuk-panel__body { font-size: 24px; }
+.status-card { border-left: 5px solid #1d70b8; background: #f3f2f1; padding: 20px; margin-bottom: 30px; }
+.status-card .govuk-heading-m { margin-bottom: 15px; }
+.status-card p:last-child { margin-bottom: 0; }
+.inline-actions { display: flex; align-items: baseline; gap: 25px; flex-wrap: wrap; }
+.inline-actions .govuk-button { margin-bottom: 20px; }
+.govuk-summary-list__value { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .prototype-banner .govuk-width-container { align-items: flex-start; font-size: 14px; gap: 10px; }
+  .govuk-main-wrapper { padding-top: 30px; padding-bottom: 40px; }
+  .govuk-panel__title { font-size: 28px; }
+}
