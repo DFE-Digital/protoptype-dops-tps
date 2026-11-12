@@ -10,6 +10,7 @@ This is not a live government or Teachers' Pensions service.
 
 Changes pushed to `main` are tested, built and deployed by the
 [GitHub Pages workflow](https://github.com/DFE-Digital/protoptype-dops-tps/actions/workflows/pages.yml).
+The build uses Ubuntu 24.04, which is supported by the pinned Playwright release.
 
 ## Run locally
 
