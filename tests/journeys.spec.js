@@ -1,7 +1,8 @@
 const { test, expect } = require('@playwright/test');
 
-const email = 'any email';
+const email = 'sam.morgan@example.com';
 const password = 'x';
+const defaultMember = { email, trn: '1234568' };
 const journeyNames = ['login', 'migrated', 'password', 'email', 'twofactor', 'registration'];
 
 async function submit(page, text = 'Continue') {
@@ -15,7 +16,7 @@ async function fillDate(page, prefix, parts) {
 }
 
 async function settings(page, { risk = true, attempts = '0', active = true, records = true, securityResult = 'pass' } = {}) {
-  await page.goto('./#/scenarios');
+  await page.goto('./#/scenarios/sam');
   await page.locator(`input[name="risk"][value="${risk ? 'on' : 'off'}"]`).check();
   await page.locator(`input[name="attempts"][value="${attempts}"]`).check();
   await page.locator(`input[name="active"][value="${active ? 'yes' : 'no'}"]`).check();
@@ -25,21 +26,21 @@ async function settings(page, { risk = true, attempts = '0', active = true, reco
   await expect(page.getByRole('status')).toContainText('Scenario saved');
 }
 
-async function identify(page, journey) {
+async function identify(page, journey, member = defaultMember) {
   await page.goto(`./#/start/${journey}`);
   if (journey === 'email') {
-    await page.getByLabel('Teachers’ reference number (TRN)', { exact: true }).fill('any TRN');
+    await page.getByLabel('Teachers’ reference number (TRN)', { exact: true }).fill(member.trn);
     await page.getByLabel('Last name', { exact: true }).fill('Any name');
     await fillDate(page, 'dob', ['day', 'month', 'year']);
   } else {
-    await page.getByLabel('Email address', { exact: true }).fill(email);
-    if (journey === 'migrated') await page.getByLabel('Teachers’ reference number (TRN)', { exact: true }).fill('any TRN');
+    await page.getByLabel('Email address', { exact: true }).fill(member.email);
+    if (journey === 'migrated') await page.getByLabel('Teachers’ reference number (TRN)', { exact: true }).fill(member.trn);
   }
   await submit(page);
 }
 
-async function reachSecurity(page, journey) {
-  await identify(page, journey);
+async function reachSecurity(page, journey, member = defaultMember) {
+  await identify(page, journey, member);
   for (let count = 0; count < 4; count++) {
     if (page.url().endsWith('/password')) {
       await page.getByLabel('Password', { exact: true }).fill(password);
@@ -149,7 +150,7 @@ test('missing answers do not use an attempt; any completed dates work and errors
   await expect(page).toHaveURL(/\/recover-email$/);
 });
 
-test('email, password and code require values but accept any text with generic errors', async ({ page }) => {
+test('email identifies a test user; password and code stay permissive with generic empty-field errors', async ({ page }) => {
   await page.goto('./#/start/login');
   await submit(page);
   await expect(page.getByRole('link', { name: 'Enter your email address', exact: true })).toBeVisible();
@@ -269,7 +270,7 @@ test('only scenario and progress data persist, not answers or passwords', async 
   await reachSecurity(page, 'login');
   await page.locator('#postcode').fill('SENSITIVE-TEST-VALUE');
   await submit(page);
-  const saved = await page.evaluate(() => sessionStorage.getItem('teachers-pensions-prototype-v1'));
+  const saved = await page.evaluate(() => sessionStorage.getItem('teachers-pensions-prototype-v2'));
   expect(saved).not.toContain('SENSITIVE-TEST-VALUE');
   expect(saved).not.toContain(password);
   expect(saved).not.toContain(email);
@@ -293,4 +294,125 @@ test('official header, service navigation and footer work under a project path',
   await footer.getByRole('link', { name: 'Accessibility', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Accessibility of this prototype' })).toBeVisible();
   expect(failedRequests).toEqual([]);
+});
+
+const presetUsers = [
+  { id: 'alex', name: 'Alex Taylor', email: 'alex.taylor@example.com', trn: '1234567', journey: 'login', outcome: 'complete' },
+  { id: 'sam', name: 'Sam Morgan', email, trn: '1234568', journey: 'login', outcome: 'security-pass' },
+  { id: 'jordan', name: 'Jordan Lee', email: 'jordan.lee@example.com', trn: '1234569', journey: 'login', outcome: 'security-retry' },
+  { id: 'casey', name: 'Casey Patel', email: 'casey.patel@example.com', trn: '1234570', journey: 'login', outcome: 'blocked' },
+  { id: 'robin', name: 'Robin Clarke', email: 'robin.clarke@example.com', trn: '1234571', journey: 'login', outcome: 'inactive' },
+  { id: 'jamie', name: 'Jamie Reed', email: 'jamie.reed@example.com', trn: '1234572', journey: 'migrated', outcome: 'complete' },
+  { id: 'taylor', name: 'Taylor Brooks', email: 'taylor.brooks@example.com', trn: '1234573', journey: 'migrated', outcome: 'mismatch' },
+  { id: 'morgan', name: 'Morgan Ellis', email: 'morgan.ellis@example.com', trn: '1234574', journey: 'twofactor', outcome: 'security-pass' },
+  { id: 'riley', name: 'Riley Shah', email: 'riley.shah@example.com', trn: '1234575', journey: 'password', outcome: 'complete' },
+  { id: 'avery', name: 'Avery Jones', email: 'avery.jones@example.com', trn: '1234576', journey: 'email', outcome: 'security-pass' },
+  { id: 'charlie', name: 'Charlie Williams', email: 'charlie.williams@example.com', trn: '1234577', journey: 'registration', outcome: 'complete' },
+  { id: 'drew', name: 'Drew Evans', email: 'drew.evans@example.com', trn: '1234578', journey: 'login', outcome: 'security-block' }
+];
+
+for (const member of presetUsers) {
+  test(`${member.name}: preset records drive the recommended journey`, async ({ page }) => {
+    await reachSecurity(page, member.journey, member);
+    if (member.outcome.startsWith('security-')) {
+      await expect(page).toHaveURL(/\/security$/);
+      await security(page);
+      if (member.outcome === 'security-retry') {
+        await expect(page.getByText('You have 2 attempts remaining.')).toBeVisible();
+        return;
+      }
+      if (member.outcome === 'security-block') {
+        await expect(page).toHaveURL(/\/blocked$/);
+        return;
+      }
+    } else if (['blocked', 'inactive', 'mismatch'].includes(member.outcome)) {
+      await expect(page).toHaveURL(new RegExp(`/${member.outcome}$`));
+      return;
+    }
+    await finish(page);
+    await expect(page).toHaveURL(/\/complete$/);
+    await expect(page.locator('.govuk-summary-list')).toContainText(member.name);
+  });
+}
+
+test('unknown identifiers are rejected; email case and TRN spacing are accepted', async ({ page }) => {
+  await page.goto('./#/start/login');
+  await page.locator('#email').fill('unknown@example.com');
+  await submit(page);
+  await expect(page.getByRole('link', { name: 'We could not find a test user with that email address' })).toBeVisible();
+  await page.locator('#email').fill('  SAM.MORGAN@EXAMPLE.COM  ');
+  await submit(page);
+  await expect(page).toHaveURL(/\/password$/);
+  await page.goto('./#/start/email');
+  await page.locator('#trn').fill('9999999');
+  await page.locator('#lastName').fill('anything');
+  await fillDate(page, 'dob', ['day', 'month', 'year']);
+  await submit(page);
+  await expect(page.getByRole('link', { name: 'We could not find a test user with that Teachers’ reference number' })).toBeVisible();
+  await page.locator('#trn').fill('1 234 568');
+  await submit(page);
+  await expect(page).toHaveURL(/\/security$/);
+});
+
+test('migration email and TRN must identify the same test user', async ({ page }) => {
+  await page.goto('./#/start/migrated');
+  await page.locator('#email').fill(email);
+  await page.locator('#trn').fill('1234567');
+  await submit(page);
+  await expect(page.getByRole('link', { name: 'Enter the Teachers’ reference number for this test user' })).toBeVisible();
+  await page.locator('#trn').fill('1234568');
+  await submit(page);
+  await expect(page).toHaveURL(/\/code$/);
+});
+
+test('failed attempts and blocks belong to the identified member, not the browser globally', async ({ page }) => {
+  const jordan = presetUsers.find(member => member.id === 'jordan');
+  await reachSecurity(page, 'login', jordan);
+  await security(page);
+  await security(page);
+  await expect(page.getByText('You have 1 attempt remaining.')).toBeVisible();
+  await reachSecurity(page, 'login', presetUsers[0]);
+  await expect(page).toHaveURL(/\/complete$/);
+  await identify(page, 'login', presetUsers.find(member => member.id === 'casey'));
+  await expect(page).toHaveURL(/\/blocked$/);
+  await reachSecurity(page, 'login', jordan);
+  await expect(page.getByText('You have 1 attempt remaining.')).toBeVisible();
+  await page.reload();
+  await security(page);
+  await expect(page).toHaveURL(/\/blocked$/);
+  await reachSecurity(page, 'login');
+  await security(page);
+  await expect(page).toHaveURL(/\/complete$/);
+});
+
+test('the mobile roster prefills a recommended journey and allows resetting records', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('./#/test-users');
+  for (const member of presetUsers) {
+    await expect(page.getByRole('heading', { name: member.name, exact: true })).toBeVisible();
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole('link', { name: 'Move your existing account as Jamie Reed', exact: true }).click();
+  await expect(page.locator('#email')).toHaveValue('jamie.reed@example.com');
+  await expect(page.locator('#trn')).toHaveValue('1234572');
+  await submit(page);
+  await expect(page).toHaveURL(/\/code$/);
+  await reachSecurity(page, 'login', presetUsers.find(member => member.id === 'drew'));
+  await security(page);
+  await expect(page).toHaveURL(/\/blocked$/);
+  await page.goto('./#/test-users');
+  await submit(page, 'Reset test users');
+  await expect(page.getByRole('status')).toContainText('Test users reset');
+  await reachSecurity(page, 'login', presetUsers.find(member => member.id === 'drew'));
+  await expect(page.getByText('You have 1 attempt remaining.')).toBeVisible();
+});
+
+test('scenario overrides change only the chosen member', async ({ page }) => {
+  await settings(page, { attempts: '3' });
+  await identify(page, 'login');
+  await expect(page).toHaveURL(/\/blocked$/);
+  await reachSecurity(page, 'login', presetUsers[0]);
+  await expect(page).toHaveURL(/\/complete$/);
+  await identify(page, 'email');
+  await expect(page).toHaveURL(/\/blocked$/);
 });

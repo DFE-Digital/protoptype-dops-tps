@@ -48,14 +48,20 @@ decision flow:
 6. Registration: matching pension-record email, email verification, identity
    checks, then password, two-step verification and account activation.
 
-All form fields accept **any non-empty value**. There are no checks against
-example data, format or calendar-date checks, password-strength rules, or
-confirmation-field matching. Empty fields display plain prompts such as
-"Enter your email address". Every date field needs its day, month and year
-filled in, but their values can be anything.
+**Email addresses and TRNs identify fictional test users.** Use an identifier
+from the list below. Email matching ignores case and surrounding whitespace;
+TRN matching ignores spaces. Account migration collects both, and they must
+identify the same test user. Unknown identifiers display a clear error.
+
+Passwords, codes and all other fields accept **any non-empty value**. TRNs
+entered later on the registration identity page are also required-only.
+There are no calendar-date checks, password-strength rules or confirmation-field
+matching. Empty fields display plain prompts such as "Enter your email address".
+Every date field needs its day, month and year filled in, but their values can
+be anything. Do not enter real personal information.
 
 After the initial journey-specific steps, an at-risk member must fill in all
-3 security questions. The **Security-question result** in prototype settings
+3 security questions. The identified member's **Security-question result**
 determines the outcome, regardless of the answers:
 
 - **Pass** simulates at least 2 correct answers, clears the at-risk flag and
@@ -63,33 +69,45 @@ determines the outcome, regardless of the answers:
 - **Fail** simulates 0 or 1 correct answers and increases failed attempts.
 
 A third failure blocks
-self-service across all journeys and displays the Call Centre message. A member
+self-service across all journeys **for that member** and displays the Call Centre message. A member
 already blocked is stopped after identification, before any other checks.
 
-Use **Prototype settings and test data** in the footer to change the at-risk
-flag, security-question result, previous failed-attempt count, active status or
-simulated record match.
-Saving settings explicitly starts a new test. By default the member is active,
-at risk, with no failed attempts, matching records and a passing security result.
+### Fictional test users
 
-### Fictional details
+Open **Prototype users and settings** in the footer, or go directly to
+[the test-user list](https://dfe-digital.github.io/protoptype-dops-tps/#/test-users).
+Each entry shows the member's current record and offers a recommended journey
+with their email and TRN prefilled. Users still choose their journey, as in the
+decision flow; recommended journeys do not add eligibility rules to the diagram.
 
-| Detail | Value |
-| --- | --- |
-| Email | alex.taylor@example.com |
-| Password | ExamplePassword1! |
-| All verification codes | 123456 |
-| TRN | 1234567 |
-| Last name | Taylor |
-| National Insurance number | QQ123456C |
-| Date of birth | 15 June 1985 |
-| Latest employer postcode | TE1 2ST |
-| Scheme start date | 1 September 2010 |
-| Last employer | Example Academy |
+| Member | Email | TRN | Starting scenario / recommended journey |
+| --- | --- | --- | --- |
+| Alex Taylor | alex.taylor@example.com | 1234567 | Normal sign-in, no extra security check |
+| Sam Morgan | sam.morgan@example.com | 1234568 | At-risk sign-in, security check passes |
+| Jordan Lee | jordan.lee@example.com | 1234569 | At-risk sign-in, security checks fail; starts at 0 failed attempts |
+| Casey Patel | casey.patel@example.com | 1234570 | Already blocked after 3 failed security checks, across all journeys |
+| Robin Clarke | robin.clarke@example.com | 1234571 | Inactive; sign-in and account recovery stop |
+| Jamie Reed | jamie.reed@example.com | 1234572 | Move a previous-service account with matching records |
+| Taylor Brooks | taylor.brooks@example.com | 1234573 | Record mismatch during account migration or registration |
+| Morgan Ellis | morgan.ellis@example.com | 1234574 | Reset two-step verification after a passing extra security check |
+| Riley Shah | riley.shah@example.com | 1234575 | Reset a forgotten password, no extra security check |
+| Avery Jones | avery.jones@example.com | 1234576 | Recover email by TRN, with a passing extra security check |
+| Charlie Williams | charlie.williams@example.com | 1234577 | Register with a matching pension record |
+| Drew Evans | drew.evans@example.com | 1234578 | At risk, 2 failed attempts; the next security check fails and blocks access |
 
-These are optional examples, also available in expandable help. You do not need
-to use them. To fail a security check, select **Fail** in prototype settings.
-Blank answers display validation errors without consuming an attempt.
+These are entirely fictional records, not real members. Example passwords,
+codes, dates and security answers in expandable help are optional; any non-empty
+values work for those fields. Blank answers do not consume a security attempt.
+
+**Change settings for [member]** edits only that user's at-risk flag, security
+result, previous failed-attempt count, active status and record-match flag.
+Saving settings clears the current journey but preserves other members' records.
+Flags and attempt counts remain independent when switching users or journeys and
+survive reloads in the same tab. Successful security checks clear only that
+member's at-risk flag and reset their attempt count.
+
+Use **Reset test users** on the list to restore every member's starting record
+and clear the current journey. Closing the tab also ends the test session.
 
 ### Deliberate prototype assumptions
 
@@ -98,8 +116,9 @@ Blank answers display validation errors without consuming an attempt.
 - The forgotten-email identification method and approved recovery action were
   unspecified in the flow; this prototype uses the fields and action above.
 - Verification codes can be any non-empty text; no email or SMS is sent.
-- Fields are required-only for easy research walkthroughs. Entered values do
-  not control record matches or security outcomes; prototype settings do.
+- Identifiers select a fictional member; remaining fields are required-only for
+  easy research walkthroughs. Member records, rather than entered answers,
+  control record matches and security outcomes.
 - Inactive records and record mismatches end with a contact-support message.
   Active-status checks are not added to migration or registration.
 - Phone numbers, contact details, real pension amounts and authenticated pension
@@ -143,14 +162,17 @@ npm test
 ```
 
 Tests serve the site beneath `/teachers-pensions/`, not just at the domain root.
-They cover all 6 normal and at-risk journeys with arbitrary values, simulated pass/fail results, retries,
-cross-journey blocking, reloads, record checks, validation, routing guards and
-mobile overflow. They do not constitute an accessibility audit.
+They cover all 6 normal and at-risk journeys with permissive non-identifier
+fields, every preset member, identifier matching, simulated pass/fail results,
+member-specific retries and blocking, overrides, reset, reloads, record checks,
+validation, routing guards and mobile overflow. They do not constitute an
+accessibility audit.
 
 ## Privacy and limitations
 
-Never enter real personal information or passwords. Only scenario flags and
-journey progress are kept in browser session storage for the current tab.
+Never enter real personal information or passwords. Only scenario flags,
+fictional member IDs and journey progress are kept in browser session storage
+for the current tab.
 Entered answers, email addresses and passwords are not persisted or sent to an
 application server. Closing the tab ends the session. There are no analytics,
 external CDN requests or application cookies. GitHub Pages can still process

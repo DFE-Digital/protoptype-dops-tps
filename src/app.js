@@ -1,21 +1,26 @@
 import { initAll } from './assets/govuk-frontend.min.js';
-import { MEMBER, JOURNEYS, evaluateSecurity, advance } from './journey.js';
+import { MEMBER, MEMBERS, JOURNEYS, scenarioFor, evaluateSecurity, advance } from './journey.js';
 
 const main = document.querySelector('#main-content');
 const navigation = document.querySelector('#navigation');
-const storageKey = 'teachers-pensions-prototype-v1';
+const storageKey = 'teachers-pensions-prototype-v2';
 const defaults = () => ({
-  atRisk: true, failedAttempts: 0, active: true, recordsMatch: true, securityResult: 'pass',
+  ...scenarioFor(MEMBERS[0]), memberId: null, suggestedMemberId: null, memberStates: {},
   journey: null, stage: null, visited: [], verified: false, method: 'email'
 });
+const memberById = id => MEMBERS.find(member => member.id === id);
+const validScenario = record => record && typeof record.atRisk === 'boolean' &&
+  Number.isInteger(record.failedAttempts) && record.failedAttempts >= 0 && record.failedAttempts <= 3 &&
+  typeof record.active === 'boolean' && typeof record.recordsMatch === 'boolean' &&
+  ['pass', 'fail'].includes(record.securityResult);
 let storageAvailable = true;
 let state = defaults();
 try {
   const saved = JSON.parse(sessionStorage.getItem(storageKey) || 'null');
-  if (saved && typeof saved.atRisk === 'boolean' && Number.isInteger(saved.failedAttempts) &&
-      saved.failedAttempts >= 0 && saved.failedAttempts <= 3 && Array.isArray(saved.visited) &&
-      typeof saved.active === 'boolean' && typeof saved.recordsMatch === 'boolean' &&
-      (saved.securityResult === undefined || ['pass', 'fail'].includes(saved.securityResult))) {
+  if (validScenario(saved) && Array.isArray(saved.visited) &&
+      (saved.memberId === null || memberById(saved.memberId)) &&
+      saved.memberStates && typeof saved.memberStates === 'object' && !Array.isArray(saved.memberStates) &&
+      Object.entries(saved.memberStates).every(([id, record]) => memberById(id) && validScenario(record))) {
     state = { ...defaults(), ...saved };
   }
 } catch (error) {
@@ -39,6 +44,8 @@ const describedBy = (name, hint) => [hint ? `${name}-hint` : '', errors[name] ? 
 
 function field(name, label, options = {}) {
   const { hint, type = 'text', width = '20', autocomplete = 'off', inputmode } = options;
+  const suggested = state.stage === 'identify' && memberById(state.suggestedMemberId);
+  const value = values[name] ?? (suggested && ['email', 'trn'].includes(name) ? suggested[name] : '');
   return `<div class="govuk-form-group ${errors[name] ? 'govuk-form-group--error' : ''}">
     <label class="govuk-label govuk-label--s" for="${name}">${label}</label>
     ${hint ? `<div class="govuk-hint" id="${name}-hint">${hint}</div>` : ''}
@@ -48,7 +55,7 @@ function field(name, label, options = {}) {
       ${inputmode ? `inputmode="${inputmode}"` : ''}
       ${describedBy(name, hint) ? `aria-describedby="${describedBy(name, hint)}"` : ''}
       ${errors[name] ? 'aria-invalid="true"' : ''}
-      ${type !== 'password' ? `value="${escape(values[name] || '')}"` : ''}>
+      ${type !== 'password' ? `value="${escape(value)}"` : ''}>
   </div>`;
 }
 
@@ -84,27 +91,43 @@ function summary(rows) {
 }
 
 function demoDetails(security = false) {
+  const member = memberById(state.memberId) || memberById(state.suggestedMemberId) || MEMBERS[0];
   const rows = security ? [
     ['Latest employer postcode', MEMBER.postcode],
     ['Scheme start date', '1 September 2010'],
     ['Last employer name', MEMBER.employer]
   ] : [
-    ['Email address', MEMBER.email],
+    ['Member', member.name],
+    ['Email address', member.email],
     ['Password', `<span class="demo-code">${MEMBER.password}</span>`],
     ['Verification code', `<span class="demo-code">${MEMBER.code}</span>`],
-    ['Teachers’ reference number (TRN)', MEMBER.trn],
-    ['Last name', MEMBER.lastName],
+    ['Teachers’ reference number (TRN)', member.trn],
+    ['Last name', member.name.split(' ').slice(1).join(' ')],
     ['National Insurance number', MEMBER.ni],
     ['Date of birth', '15 June 1985']
   ];
   return `<details class="govuk-details demo-details" data-module="govuk-details">
     <summary class="govuk-details__summary"><span class="govuk-details__summary-text">Example details for this prototype</span></summary>
-    <div class="govuk-details__text">${p('You can use these examples or enter any other fictional values. Nothing is sent to Teachers’ Pensions.')}${summary(rows)}
-    ${security ? p(`Answers are not checked. Choose whether the check passes or fails in ${link('#/scenarios', 'prototype settings')}.`) : ''}</div>
+    <div class="govuk-details__text">${p(`Use an email address or TRN from ${link('#/test-users', 'the fictional test users')}. Other fields accept any non-empty value. Nothing is sent to Teachers’ Pensions.`)}${summary(rows)}
+    ${security ? p(`Answers are not checked. This member’s record determines whether the check passes or fails. You can change it in ${link('#/scenarios', 'prototype settings')}.`) : ''}</div>
   </details>`;
 }
 
+function currentScenario(member) {
+  return state.memberStates[member.id] || scenarioFor(member);
+}
+
+function selectMember(member) {
+  state = { ...state, ...currentScenario(member), memberId: member.id, verified: false };
+}
+
+function settingsMember() {
+  const id = location.hash.slice(1).split('/').filter(Boolean)[1];
+  return memberById(id || state.memberId || MEMBERS[0].id);
+}
+
 function persist() {
+  if (state.memberId) state.memberStates[state.memberId] = scenarioFor(state);
   if (!storageAvailable) return;
   try {
     sessionStorage.setItem(storageKey, JSON.stringify(state));
@@ -158,7 +181,8 @@ function accountPage() {
     journeyLinks(['password', 'email', 'twofactor']) +
     `<h2 class="govuk-heading-m">If you have not used this service before</h2>` +
     p('Create an account, or move your account if you used the previous member service.') +
-    journeyLinks(['registration', 'migrated']);
+    journeyLinks(['registration', 'migrated']) +
+    `<div class="govuk-inset-text">For research, choose a member from ${link('#/test-users', 'the fictional test users')} to try a specific decision-tree scenario.</div>`;
 }
 
 function identify() {
@@ -223,7 +247,7 @@ function setup2faPage() {
   return heading('Set up two-step verification', JOURNEYS[state.journey].title) +
     p('Choose how you would like to receive a security code when you sign in.') +
     form(radios('method', 'How would you like to receive your code?', [
-      ['email', `Email to ${MEMBER.email}`], ['sms', 'Text message to your phone ending in 6789']
+      ['email', `Email to ${memberById(state.memberId).email}`], ['sms', 'Text message to your phone ending in 6789']
     ], state.method) +
       `<div class="govuk-inset-text">No code will be sent. Enter any fictional code to continue.</div>` +
       field('code', 'Verification code', { width: '10', inputmode: 'numeric' }));
@@ -259,6 +283,7 @@ function completePage() {
     p(state.journey === 'login' ? 'In a live service, you would now be able to view your pension account.' : 'In a live service, you would now continue to your pension account using your updated sign-in details.') +
     `<div class="status-card"><h2 class="govuk-heading-m">Your verification</h2>` +
     summary([
+      ['Member', memberById(state.memberId).name],
       ['Journey', JOURNEYS[state.journey].title],
       ['Extra security check', state.verified ? 'Passed (simulated)' : 'Not required'],
       ['At-risk flag', state.atRisk ? 'On' : 'Off'],
@@ -267,16 +292,44 @@ function completePage() {
     `<div class="inline-actions"><a class="govuk-button" data-module="govuk-button" href="#/">Return to start</a>${link('#/scenarios', 'Try another scenario')}</div>`;
 }
 
-function scenariosPage() {
-  return heading('Prototype settings', 'Research and testing') +
+function testUsersPage() {
+  return heading('Fictional test users', 'Research and testing') +
+    (settingsSaved ? `<p class="govuk-body" role="status">Test users reset to their starting records.</p>` : '') +
+    p('Use one of these fictional email addresses or Teachers’ reference numbers to identify a member. Their record determines the security checks and outcome. Passwords, verification codes and all other fields accept any non-empty value.') +
+    p('Each user has their own at-risk flag and failed-attempt count. Recommended journeys are starting points, not extra eligibility rules beyond the decision tree.') +
+    `<form novalidate><button class="govuk-button govuk-button--secondary" data-module="govuk-button" type="submit">Reset test users</button></form>` +
+    MEMBERS.map(member => {
+      const record = currentScenario(member);
+      return `<section class="govuk-!-margin-bottom-8" aria-labelledby="member-${member.id}">
+        <h2 class="govuk-heading-m" id="member-${member.id}">${member.name}</h2>
+        ${p(`Starting scenario: ${member.description}`)}
+        ${summary([
+          ['Email address', member.email],
+          ['Teachers’ reference number (TRN)', member.trn],
+          ['Current member status', record.active ? 'Active' : 'Inactive'],
+          ['At-risk flag', record.atRisk ? 'On' : 'Off'],
+          ['Failed security attempts', String(record.failedAttempts)],
+          ['Security result', record.securityResult === 'pass' ? 'Pass (at least 2 correct, simulated)' : 'Fail (0 or 1 correct, simulated)'],
+          ['Records match', record.recordsMatch ? 'Yes' : 'No']
+        ])}
+        ${p(link(`#/start/${member.journey}/${member.id}`, `${JOURNEYS[member.journey].title} as ${member.name}`))}
+        ${p(link(`#/scenarios/${member.id}`, `Change settings for ${member.name}`))}
+      </section>`;
+    }).join('');
+}
+
+function scenariosPage(member) {
+  const record = currentScenario(member);
+  return heading('Prototype settings', member.name) +
     (settingsSaved ? `<div class="govuk-notification-banner govuk-notification-banner--success" role="status"><div class="govuk-notification-banner__header"><h2 class="govuk-notification-banner__title">Success</h2></div><div class="govuk-notification-banner__content">${p('<strong>Scenario saved. Choose a journey to begin.</strong>')}</div></div>` : '') +
-    p('Choose the fictional member’s starting state. Settings apply to all 6 journeys in this browser tab. Saving settings starts a new test and clears journey progress.') +
+    p(`Change the record for ${member.name} (${member.email}). Settings apply only to this user in this browser tab. Saving clears journey progress, but preserves other users’ records.`) +
+    p(link('#/test-users', 'Choose a different test user or reset the starting records')) +
     `<form novalidate>` +
-    radios('risk', 'Is the member flagged as at risk?', [['on', 'Yes — ask all 3 security questions'], ['off', 'No — continue without extra security questions']], state.atRisk ? 'on' : 'off') +
-    radios('securityResult', 'Security-question result', [['pass', 'Pass — simulate at least 2 correct answers'], ['fail', 'Fail — simulate 0 or 1 correct answers']], state.securityResult, 'Any completed answers are accepted. This setting determines the result, not the values entered.') +
-    radios('attempts', 'Previous unsuccessful security attempts', [['0', 'None'], ['1', '1 unsuccessful attempt'], ['2', '2 unsuccessful attempts — one try remaining'], ['3', '3 unsuccessful attempts — self-service blocked']], String(state.failedAttempts)) +
-    radios('active', 'Member status', [['yes', 'Active'], ['no', 'Inactive']], state.active ? 'yes' : 'no', 'The active-status check applies to sign-in and account-recovery journeys.') +
-    radios('records', 'Do the member records match?', [['yes', 'Yes'], ['no', 'No — simulate a record mismatch']], state.recordsMatch ? 'yes' : 'no', 'Simulates a Ping / pension-record mismatch for moved accounts, or a pension-record mismatch during registration.') +
+    radios('risk', 'Is the member flagged as at risk?', [['on', 'Yes — ask all 3 security questions'], ['off', 'No — continue without extra security questions']], record.atRisk ? 'on' : 'off') +
+    radios('securityResult', 'Security-question result', [['pass', 'Pass — simulate at least 2 correct answers'], ['fail', 'Fail — simulate 0 or 1 correct answers']], record.securityResult, 'Any completed answers are accepted. This setting determines the result, not the values entered.') +
+    radios('attempts', 'Previous unsuccessful security attempts', [['0', 'None'], ['1', '1 unsuccessful attempt'], ['2', '2 unsuccessful attempts — one try remaining'], ['3', '3 unsuccessful attempts — self-service blocked']], String(record.failedAttempts)) +
+    radios('active', 'Member status', [['yes', 'Active'], ['no', 'Inactive']], record.active ? 'yes' : 'no', 'The active-status check applies to sign-in and account-recovery journeys.') +
+    radios('records', 'Do the member records match?', [['yes', 'Yes'], ['no', 'No — simulate a record mismatch']], record.recordsMatch ? 'yes' : 'no', 'Simulates a Ping / pension-record mismatch for moved accounts, or a pension-record mismatch during registration.') +
     button('Save scenario') + '</form>' +
     p(link('#/account', 'Choose a journey')) +
     demoDetails() + demoDetails(true);
@@ -296,7 +349,7 @@ function render() {
   let content;
   navigation.innerHTML = '';
   if (route === 'start' && JOURNEYS[parts[1]]) {
-    state = { ...state, journey: parts[1], stage: 'identify', visited: ['identify'], verified: false, method: 'email' };
+    state = { ...defaults(), memberStates: state.memberStates, journey: parts[1], stage: 'identify', visited: ['identify'], suggestedMemberId: memberById(parts[2]) ? parts[2] : null };
     persist();
     location.replace(`#/journey/${state.journey}/identify`);
     return;
@@ -338,12 +391,13 @@ function render() {
   } else {
     navigation.innerHTML = '<a class="govuk-back-link" href="#/">Back to start</a>';
     if (route === 'account') content = accountPage();
-    else if (route === 'scenarios') content = scenariosPage();
+    else if (route === 'test-users') content = testUsersPage();
+    else if (route === 'scenarios' && settingsMember()) content = scenariosPage(settingsMember());
     else if (route === 'about') content = heading('About this prototype') +
       p('This is a fictional Teachers’ Pensions service concept for the Department for Education. It is not GOV.UK or a live Teachers’ Pensions service.') +
       p('The 6 journeys demonstrate sign-in, moving an existing account, forgotten passwords, forgotten email addresses, resetting two-step verification and registration.') +
-      p('Member identification, record checks, codes and account changes are simulated in your browser. All fields accept any non-empty value. Dates, formats, password strength and confirmation matches are not checked. The at-risk flag is checked after the journey-specific steps. All 3 security questions are asked, but prototype settings determine whether the check passes or fails. A third failed attempt blocks self-service across journeys.') +
-      p('Only fictional scenario settings and journey progress are stored in session storage in this tab. Form answers and passwords are not stored. Closing the tab clears the session. There are no analytics or application cookies.') +
+      p('Member identification, record checks, codes and account changes are simulated in your browser. Email addresses and TRNs must identify a fictional test user. Passwords, codes and other fields accept any non-empty value. Dates, password strength and confirmation matches are not checked. Each member’s record determines the at-risk flag and security outcome. A third failed attempt blocks self-service across journeys for that member only.') +
+      p('Only fictional member IDs, per-member scenario settings and journey progress are stored in session storage in this tab. Entered form answers and passwords are not stored. Closing the tab clears the session. There are no analytics or application cookies.') +
       p('If hosted on GitHub Pages, the hosting provider may receive normal web request information. Do not enter personal information into this prototype.') +
       p('The prototype uses GOV.UK Frontend under its MIT licence, with system fonts rather than the restricted GDS Transport font. It has not been endorsed by GOV.UK or the Department for Education.');
     else if (route === 'accessibility') content = heading('Accessibility of this prototype') +
@@ -378,22 +432,39 @@ function onSubmit(event) {
   const requiredDate = (name, message) => {
     if (['day', 'month', 'year'].some(part => !get(`${name}-${part}`))) errors[name] = message;
   };
-  if (location.hash === '#/scenarios') {
-    state = { ...defaults(), atRisk: get('risk') === 'on', failedAttempts: Number(get('attempts')), active: get('active') === 'yes', recordsMatch: get('records') === 'yes', securityResult: get('securityResult') };
+  if (location.hash === '#/test-users') {
+    state = defaults();
+    persist();
+    settingsSaved = true;
+    render();
+    return;
+  }
+  if (location.hash.startsWith('#/scenarios')) {
+    const member = settingsMember();
+    state = { ...defaults(), memberStates: state.memberStates, memberId: member.id, atRisk: get('risk') === 'on', failedAttempts: Number(get('attempts')), active: get('active') === 'yes', recordsMatch: get('records') === 'yes', securityResult: get('securityResult') };
     persist();
     settingsSaved = true;
     render();
     return;
   }
   const stage = state.stage;
+  let identifiedMember;
   if (stage === 'identify') {
     if (state.journey === 'email') {
       required('trn', 'Enter your Teachers’ reference number');
       required('lastName', 'Enter your last name');
       requiredDate('dob', 'Enter your date of birth');
+      identifiedMember = MEMBERS.find(member => member.trn === get('trn').replace(/\s/g, ''));
+      if (get('trn') && !identifiedMember) errors.trn = 'We could not find a test user with that Teachers’ reference number';
     } else {
       required('email', 'Enter your email address');
+      identifiedMember = MEMBERS.find(member => member.email === get('email').toLowerCase());
+      if (get('email') && !identifiedMember) errors.email = 'We could not find a test user with that email address';
       if (state.journey === 'migrated') required('trn', 'Enter your Teachers’ reference number');
+      if (state.journey === 'migrated' && identifiedMember && get('trn') &&
+          identifiedMember.trn !== get('trn').replace(/\s/g, '')) {
+        errors.trn = 'Enter the Teachers’ reference number for this test user';
+      }
     }
   } else if (stage === 'password') {
     required('password', 'Enter your password');
@@ -425,6 +496,7 @@ function onSubmit(event) {
   // Rewinding a journey invalidates later pages, so a saved URL cannot skip a check.
   state.visited = state.visited.slice(0, state.visited.indexOf(stage) + 1);
   if (stage === 'identify') {
+    selectMember(identifiedMember);
     if (state.failedAttempts >= 3) return go('blocked');
     if (!state.active && !['registration', 'migrated'].includes(state.journey)) return go('inactive');
     if (!state.recordsMatch && state.journey === 'registration') return go('mismatch');
